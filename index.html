@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Wiener Linien Monitor</title>
+<style>
+body { margin:0; background:#111; font-family:Arial,sans-serif; color:white; }
+.container { width:900px; max-width:100%; margin:auto; padding:20px; }
+.topbar { display:flex; justify-content:space-between; margin-bottom:20px; }
+.weather, .clock { background:#222; padding:14px 28px; border-radius:12px; font-size:24px; }
+.clock { font-size:26px; }
+.title { text-align:center; margin-bottom:15px; }
+.title h2 { font-size:22px; margin-top:5px; }
+.panel { background:#2b2b2b; border-radius:18px; padding:22px; }
+.header-line { font-size:28px; margin-bottom:15px; font-weight:bold; }
+.departure { display:flex; justify-content:flex-start; align-items:center; padding:8px 14px; border-bottom:1px solid #444; border-radius:10px; margin-bottom:5px; }
+.line-box { background:#d60000; padding:8px 12px; border-radius:10px; font-weight:bold; font-size:24px; margin-right:10px; }
+.direction { font-size:18px; color:white; margin-right:auto; }
+.time { color:orange; font-size:32px; font-weight:bold; min-width:80px; text-align:right; }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="topbar">
+        <div class="weather" id="weather">--°C Wien</div>
+        <div class="clock" id="clock">--:--</div>
+    </div>
+    <div class="title">
+        <h1>Wiener Linien</h1>
+        <h2>U1 Oberlaa → Leopoldau</h2>
+    </div>
+    <div class="panel">
+        <div class="header-line">Nächste Ankünfte</div>
+        <div class="departure"><div class="line-box">U1</div><div class="direction">Oberlaa → Leopoldau</div><div class="time" id="t1">--</div></div>
+        <div class="departure"><div class="line-box">U1</div><div class="direction">Oberlaa → Leopoldau</div><div class="time" id="t2">--</div></div>
+        <div class="departure"><div class="line-box">U1</div><div class="direction">Oberlaa → Leopoldau</div><div class="time" id="t3">--</div></div>
+        <div class="departure"><div class="line-box">U1</div><div class="direction">Oberlaa → Leopoldau</div><div class="time" id="t4">--</div></div>
+    </div>
+</div>
+
+<script>
+// Uhr
+function updateClock(){
+    const now = new Date();
+    const t = String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+    const el = document.getElementById("clock");
+    if(el.innerText!==t) el.innerText=t;
+}
+updateClock();
+setInterval(updateClock,1000);
+
+// Wetter in Wien (stabil via ThingProxy)
+async function updateWeather(){
+    try{
+        const proxy = "https://thingproxy.freeboard.io/fetch/";
+        const res = await fetch(proxy+"https://api.open-meteo.com/v1/forecast?latitude=48.2082&longitude=16.3738&current_weather=true");
+        const data = await res.json();
+        if(data?.current_weather?.temperature!==undefined){
+            const temp = Math.round(data.current_weather.temperature)+"°C Wien";
+            const el = document.getElementById("weather");
+            if(el.innerText!==temp) el.innerText=temp;
+        }
+    }catch(e){ console.log("Wetterfehler", e); }
+}
+updateWeather();
+setInterval(updateWeather,5*60*1000);
+
+// U-Bahn Abfahrten in Minuten
+async function updateTimes(){
+    const stopId="4134"; // Oberlaa
+    try{
+        const proxy = "https://thingproxy.freeboard.io/fetch/";
+        const url = proxy+encodeURIComponent("https://www.wienerlinien.at/ogd_realtime/monitor?rbl="+stopId);
+        const res = await fetch(url);
+        const data = await res.json();
+        const lines = data.data.monitors[0].lines;
+        const u1 = lines.find(l=>l.name==="U1");
+        if(!u1) return;
+        const deps = u1.departures.departure;
+        const now = new Date();
+        for(let i=0;i<4;i++){
+            const dep = deps[i];
+            const el = document.getElementById("t"+(i+1));
+            if(!dep?.departureTime?.timePlanned){ if(el.innerText!=="--") el.innerText="--"; continue; }
+            const planned = new Date(dep.departureTime.timePlanned);
+            const diff = Math.round((planned-now)/60000);
+            const display = diff>=0 ? diff+" Min" : "--";
+            if(el.innerText!==display) el.innerText=display;
+        }
+    }catch(e){ console.log("Fehler Abfahrten", e); }
+}
+updateTimes();
+setInterval(updateTimes,10000);
+</script>
+</body>
+</html>
