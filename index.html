@@ -13,10 +13,10 @@ body { margin:0; background:#111; font-family:Arial,sans-serif; color:white; }
 .title h2 { font-size:22px; margin-top:5px; }
 .panel { background:#2b2b2b; border-radius:18px; padding:22px; }
 .header-line { font-size:28px; margin-bottom:15px; font-weight:bold; }
-.departure { display:flex; justify-content:flex-start; align-items:center; padding:8px 14px; border-bottom:1px solid #444; border-radius:10px; margin-bottom:5px; }
-.line-box { background:#d60000; padding:8px 12px; border-radius:10px; font-weight:bold; font-size:24px; margin-right:10px; }
-.direction { font-size:18px; color:white; margin-right:auto; }
-.time { color:orange; font-size:32px; font-weight:bold; min-width:80px; text-align:right; }
+.departure { display:flex; justify-content:space-between; align-items:center; padding:8px 14px; border-bottom:1px solid #444; border-radius:10px; margin-bottom:5px; }
+.line-box { background:#d60000; padding:8px 18px; border-radius:10px; font-weight:bold; font-size:24px; }
+.direction { font-size:18px; color:white; margin-left:10px; margin-right:auto; }
+.time { color:orange; font-size:32px; font-weight:bold; }
 </style>
 </head>
 <body>
@@ -40,57 +40,55 @@ body { margin:0; background:#111; font-family:Arial,sans-serif; color:white; }
 
 <script>
 // Uhr
-function updateClock(){
+function updateClock() {
     const now = new Date();
-    const timeStr = String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
-    const clockEl = document.getElementById("clock");
-    if(clockEl.innerText !== timeStr) clockEl.innerText = timeStr;
+    document.getElementById("clock").innerText =
+        String(now.getHours()).padStart(2,"0") + ":" +
+        String(now.getMinutes()).padStart(2,"0");
 }
 updateClock();
-setInterval(updateClock,1000);
+setInterval(updateClock, 1000);
 
-// Wetter Wien über ThingProxy
+// Wetter in Wien über Open-Meteo (funktioniert wie im Beispiel)
 async function updateWeather(){
-    try{
-        const proxy = "https://thingproxy.freeboard.io/fetch/";
-        const res = await fetch(proxy+"https://api.open-meteo.com/v1/forecast?latitude=48.2082&longitude=16.3738&current_weather=true");
-        const data = await res.json();
-        if(data?.current_weather?.temperature!==undefined){
-            const temp = Math.round(data.current_weather.temperature)+"°C Wien";
-            const weatherEl = document.getElementById("weather");
-            if(weatherEl.innerText !== temp) weatherEl.innerText = temp;
+    try {
+        const r = await fetch("https://api.open-meteo.com/v1/forecast?latitude=48.2082&longitude=16.3738&current_weather=true");
+        const d = await r.json();
+        if(d.current_weather && d.current_weather.temperature !== undefined){
+            document.getElementById("weather").innerText = Math.round(d.current_weather.temperature) + "°C Wien";
         }
-    }catch(e){ console.log("Wetterfehler", e); }
+    } catch(e){ console.log("Wetterfehler", e); }
 }
 updateWeather();
 setInterval(updateWeather, 5*60*1000);
 
-// U-Bahn Oberlaa → Leopoldau Abfahrten
+// Abfahrten als Minuten bis Ankunft (wie im funktionierenden Beispiel)
 async function updateTimes(){
     const stopId = "4134";
     try{
-        const proxy = "https://thingproxy.freeboard.io/fetch/";
-        const url = proxy + encodeURIComponent("https://www.wienerlinien.at/ogd_realtime/monitor?rbl="+stopId);
-        const res = await fetch(url);
+        const res = await fetch("https://api.allorigins.win/raw?url="+encodeURIComponent("https://www.wienerlinien.at/ogd_realtime/monitor?rbl="+stopId));
         const data = await res.json();
-        const lines = data?.data?.monitors[0]?.lines;
-        const u1 = lines?.find(l=>l.name==="U1");
+        const lines = data.data.monitors[0].lines;
+        const u1 = lines.find(l=>l.name==="U1");
         if(!u1) return;
         const deps = u1.departures.departure;
         const now = new Date();
+
         for(let i=0;i<4;i++){
             const dep = deps[i];
             const el = document.getElementById("t"+(i+1));
-            if(!dep?.departureTime?.timePlanned){ if(el.innerText!=="--") el.innerText="--"; continue; }
+            if(!dep || !dep.departureTime?.timePlanned){
+                el.innerText="--";
+                continue;
+            }
             const planned = new Date(dep.departureTime.timePlanned);
-            const diff = Math.round((planned-now)/60000);
-            const display = diff>=0 ? diff+" Min" : "--";
-            if(el.innerText!==display) el.innerText=display;
+            const diff = Math.round((planned - now)/60000);
+            el.innerText = diff >=0 ? diff + " Min" : "--";
         }
     }catch(e){ console.log("Fehler Abfahrten", e); }
 }
 updateTimes();
-setInterval(updateTimes,10000);
+setInterval(updateTimes, 10000);
 </script>
 </body>
 </html>
